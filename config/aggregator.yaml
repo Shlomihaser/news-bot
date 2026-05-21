@@ -1,0 +1,240 @@
+# news-bot configuration
+# Single source of truth for sources, keywords, weights, and digest labels.
+# Edit this file to tune the bot — no code changes required.
+
+time_window_hours: 24
+
+# ---------------------------------------------------------------------------
+# Sources
+# ---------------------------------------------------------------------------
+# Each scraper has an `enabled` flag. Set to false to skip a whole source.
+
+sources:
+  rss:
+    enabled: true
+    feeds:
+      - { url: https://hf.co/blog/feed.xml,                              name: Hugging Face Blog }
+      - { url: https://jamesg.blog/hf-papers.xml,                        name: Hugging Face Paper }
+      - { url: https://openai.com/blog/rss.xml,                          name: OpenAI Blog }
+      - { url: https://thegradient.pub/rss/,                             name: The Gradient }
+      - { url: https://jalammar.github.io/feed.xml,                      name: Jay Alammar }
+      - { url: https://deepmind.google/blog/rss.xml,                     name: DeepMind Blog }
+      - { url: https://news.mit.edu/rss/topic/artificial-intelligence2,  name: AI From MIT News }
+      - { url: https://www.technologyreview.com/feed/,                   name: General News From MIT News }
+      - { url: https://blogs.microsoft.com/ai/feed/,                     name: Microsoft AI Blog }
+      - { url: https://machinelearningmastery.com/blog/feed/,            name: machinelearningmastery Blog }
+      - { url: https://blogs.nvidia.com/blog/category/ai/feed/,          name: Nvidia AI Blog }
+      - { url: https://towardsdatascience.com/feed/,                     name: Towards Data Science }
+      - { url: http://theverge.com/rss/index.xml,                        name: The Verge }
+      - { url: https://simonwillison.net/atom/everything/,               name: Simon Willison }
+      - { url: https://www.anthropic.com/rss.xml,                        name: Anthropic Blog }
+      - { url: https://importai.substack.com/feed,                       name: Import AI }
+      - { url: https://lilianweng.github.io/index.xml,                   name: Lilian Weng }
+      - { url: https://magazine.sebastianraschka.com/feed,               name: Sebastian Raschka }
+      - { url: https://www.latent.space/feed,                            name: Latent Space }
+
+  hackernews:
+    enabled: true
+    top_stories:
+      fetch_n: 60          # how many top-story IDs to pull
+      min_score: 100       # drop stories below this HN score
+    algolia:
+      keywords: [Claude, GPT, Anthropic, OpenAI, LLM]
+      min_points: 50
+
+  reddit:
+    enabled: true
+    subreddits:
+      - { name: LocalLLaMA,      sort: hot, limit: 25, min_score: 100 }
+      - { name: MachineLearning, sort: hot, limit: 20, min_score: 60 }
+      - { name: ClaudeAI,        sort: hot, limit: 15, min_score: 30 }
+      - { name: OpenAI,          sort: hot, limit: 15, min_score: 80 }
+      - { name: StableDiffusion, sort: hot, limit: 15, min_score: 100 }
+      - { name: singularity,     sort: top, limit: 10, min_score: 500, time_filter: day }
+      - { name: LocalLLM,        sort: hot, limit: 15, min_score: 50 }
+
+  github:
+    enabled: true
+    releases:
+      - { owner: vllm-project,   repo: vllm,                    topics: [llm, inference] }
+      - { owner: ollama,         repo: ollama,                  topics: [llm, inference] }
+      - { owner: ggerganov,      repo: llama.cpp,               topics: [llm, inference] }
+      - { owner: huggingface,    repo: transformers,            topics: [llm, transformer] }
+      - { owner: huggingface,    repo: diffusers,               topics: [diffusion-models] }
+      - { owner: anthropics,     repo: anthropic-sdk-python,    topics: [llm, claude] }
+      - { owner: anthropics,     repo: claude-code,             topics: [agent, ai-agent, claude, mcp] }
+      - { owner: openai,         repo: openai-python,           topics: [llm] }
+      - { owner: langchain-ai,   repo: langchain,               topics: [agent, agent-framework, llm] }
+      - { owner: microsoft,      repo: autogen,                 topics: [agent, multi-agent, agent-framework] }
+      - { owner: unslothai,      repo: unsloth,                 topics: [llm, fine-tuning] }
+      - { owner: comfyanonymous, repo: ComfyUI,                 topics: [diffusion-models] }
+      - { owner: run-llama,      repo: llama_index,             topics: [agent, rag, llm] }
+      - { owner: stanfordnlp,    repo: dspy,                    topics: [llm, agent-framework] }
+      - { owner: Aider-AI,       repo: aider,                   topics: [ai-agent, agent] }
+      - { owner: cline,          repo: cline,                   topics: [ai-agent, agent, mcp] }
+      - { owner: microsoft,      repo: semantic-kernel,         topics: [agent, agent-framework] }
+      - { owner: exo-explore,    repo: exo,                     topics: [llm, inference] }
+      - { owner: microsoft,      repo: markitdown,              topics: [tool] }
+    search:
+      topics: [llm, agent, rag, mcp, transformer, diffusion-models]
+      min_stars: 500
+    user_events: [karpathy, ggerganov, simonw, jxnl]
+    # Hardcoded topic mapping for repos seen via user-events feed.
+    event_repo_topics:
+      "anthropics/claude-code":  [agent, ai-agent, claude, mcp]
+      "simonw/llm":              [llm, tool]
+      "ggerganov/llama.cpp":     [llm, inference]
+      "ggerganov/whisper.cpp":   [whisper]
+      "karpathy/nanochat":       [llm]
+      "karpathy/llm.c":          [llm]
+      "jxnl/instructor":         [llm, tool]
+
+  telegram:
+    enabled: false           # disabled by default; add channel handles to enable
+    channels: []             # e.g. [ai_newz, seeallochnaya] (no leading @)
+    per_channel_limit: 30
+
+  anthropic_official:
+    enabled: true
+
+# ---------------------------------------------------------------------------
+# Scoring
+# ---------------------------------------------------------------------------
+
+scoring:
+  min_score: 3               # items below this are filtered out
+  max_items: 30              # cap on items per digest (official Anthropic bypasses cap)
+
+  keywords:
+    # High priority — model names & releases
+    gpt: 5
+    gpt-4: 5
+    gpt-5: 5
+    chatgpt: 5
+    claude: 5
+    gemini: 5
+    llama: 5
+    mistral: 5
+    sora: 5
+    veo: 5
+    deepseek: 5
+    phi: 4
+    qwen: 4
+    gemma: 4
+    stable diffusion: 5
+    midjourney: 5
+    whisper: 4
+    copilot: 4
+    dall-e: 5
+    flux: 4
+    ideogram: 4
+    # Video & image generation
+    video model: 5
+    text-to-video: 5
+    video generation: 5
+    text-to-image: 4
+    image generation: 4
+    image model: 4
+    # Announcements / launches
+    release: 4
+    released: 4
+    launch: 4
+    launches: 4
+    announce: 4
+    announcing: 4
+    introducing: 4
+    open-source: 4
+    open source: 4
+    breakthrough: 4
+    state-of-the-art: 4
+    sota: 4
+    new model: 5
+    # AI concepts
+    benchmark: 3
+    multimodal: 4
+    agent: 3
+    agents: 3
+    reasoning: 3
+    fine-tune: 3
+    fine-tuning: 3
+    training: 3
+    transformer: 3
+    diffusion: 3
+    robotics: 3
+    self-driving: 3
+    autonomous: 3
+    # Ecosystem
+    hugging face: 3
+    openai: 4
+    anthropic: 4
+    deepmind: 4
+    google ai: 3
+    meta ai: 3
+    microsoft ai: 3
+    nvidia: 3
+    trending: 2
+    framework: 2
+    library: 2
+    api: 2
+    sdk: 2
+    dataset: 2
+    tool: 2
+
+  negative_keywords:
+    sponsored: -3
+    advertisement: -3
+    casino: -10
+    crypto pump: -5
+    nft drop: -5
+
+  # Per-source weight overrides. Keyed first by source_name, then source_type.
+  source_weights:
+    "Anthropic Blog": 5
+    "Simon Willison": 4
+    "Lilian Weng": 4
+    "Import AI": 4
+    "OpenAI Blog": 4
+    "DeepMind Blog": 4
+    "github_release": 3
+    "hackernews": 3
+    "r/MachineLearning": 3
+    "r/LocalLLaMA": 3
+    "telegram": 2
+  default_source_weight: 1
+
+# ---------------------------------------------------------------------------
+# Digest formatting
+# ---------------------------------------------------------------------------
+
+digest:
+  section_labels:
+    title:         "Daily AI News Digest"
+    official:      "Official from Anthropic"
+    big_releases:  "Big Releases"
+    agents:        "AI Agents & New Tools"
+    github:        "Hot on GitHub"
+    flash:         "Flash News"
+    continued:     "Digest continued"
+    empty:         "No new news today"
+
+  footer_lines:
+    - "━━━━━━━━━━━━"
+    - "🤖 <i>AI News Bot · Daily Digest</i>"
+
+  # GitHub topics that mark a repo as an "agent" for digest grouping.
+  agent_topics:
+    - agent
+    - ai-agent
+    - ai-agents
+    - autonomous-agent
+    - autonomous-agents
+    - agentic
+    - multi-agent
+    - multi-agents
+    - mcp
+    - mcp-server
+    - mcp-client
+    - model-context-protocol
+    - llm-agent
+    - llm-agents
+    - agent-framework

@@ -1,0 +1,94 @@
+name: AI News Aggregator Bot
+
+on:
+  schedule:
+    # Daily at 03:00 UTC. Edit this cron to change the schedule.
+    # GitHub Actions queue delay typically adds ~1h to scheduled runs.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  run_bot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # cache + upload-artifact
+      actions: read     # gh api access for backup restore
+    concurrency: news-bot-single-run
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Restore sent_links.db from cache
+      id: restore-cache-db
+      uses: actions/cache/restore@v4
+      with:
+        path: data/sent_links.db
+        key: ${{ runner.os }}-sent-links-db-${{ github.run_id }}
+        restore-keys: |
+          ${{ runner.os }}-sent-links-db-
+      continue-on-error: true
+
+    # If the cache was missed, fall back to the most recent artifact backup.
+    # Using `gh api` instead of actions/download-artifact so a missing artifact
+    # is a silent no-op rather than a workflow annotation.
+    - name: Download sent_links.db backup if cache miss
+      if: steps.restore-cache-db.outputs.cache-hit != 'true' && !cancelled()
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        artifact_id=$(gh api \
+          "/repos/${{ github.repository }}/actions/artifacts?name=sent_links.db-backup&per_page=1" \
+          --jq '[.artifacts[] | select(.expired==false)][0].id // empty')
+        if [ -z "$artifact_id" ]; then
+          echo "No backup artifact found (first run or expired); continuing."
+          exit 0
+        fi
+        echo "Downloading backup artifact id=$artifact_id"
+        gh api "/repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip" > backup.zip
+        unzip -o backup.zip -d .
+        rm backup.zip
+
+    - name: Run bot
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+      run: |
+        python -m src.main
+
+    - name: Save sent_links.db to cache
+      uses: actions/cache/save@v4
+      if: always()
+      with:
+        path: data/sent_links.db
+        key: ${{ runner.os }}-sent-links-db-${{ github.run_id }}
+      continue-on-error: true
+
+    - name: Upload sent_links.db as long-term backup
+      uses: actions/upload-artifact@v4
+      if: github.event_name == 'schedule'
+      with:
+        name: sent_links.db-backup
+        path: data/sent_links.db
+        overwrite: true
+        retention-days: 90

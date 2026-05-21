@@ -1,0 +1,40 @@
+name: Keepalive
+
+# GitHub auto-disables `schedule:`-triggered workflows after 60 days of
+# inactivity on the default branch. This workflow runs weekly, makes a
+# trivial commit to LAST_RUN.md, and resets that 60-day clock.
+#
+# Uses the built-in GITHUB_TOKEN — no secrets/setup required.
+
+on:
+  schedule:
+    # Every Monday at 06:17 UTC (off-peak; staggered from the main bot).
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency: keepalive-single-run
+
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+
+      - name: Update LAST_RUN.md timestamp
+        run: |
+          echo "Last keepalive run: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" > LAST_RUN.md
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add LAST_RUN.md
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: keepalive heartbeat [skip ci]"
+            git push
+          fi
