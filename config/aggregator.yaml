@@ -207,13 +207,17 @@ scoring:
 # ---------------------------------------------------------------------------
 
 digest:
+  # Max items shown per section. Items beyond this are silently dropped
+  # from the digest but still saved to the dedup DB.
+  section_item_cap: 5
+
   section_labels:
     title:         "Daily AI News Digest"
-    official:      "Official from Anthropic"
+    official:      "Anthropic"
     big_releases:  "Big Releases"
-    agents:        "AI Agents & New Tools"
+    agents:        "AI Agents & Tools"
     github:        "Hot on GitHub"
-    flash:         "Flash News"
+    flash:         "Flash"
     continued:     "Digest continued"
     empty:         "No new news today"
 

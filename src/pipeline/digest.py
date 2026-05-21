@@ -1,39 +1,38 @@
 """Digest formatting: turn scored ContentItems into HTML-formatted messages.
 
-Pure formatting logic — no I/O, no Telegram. The output is a list of strings,
-each ready to be sent as a single Telegram message (already split to respect
-the 4096-character limit).
+Compact single-line layout. Each item is a clickable title with a short
+metadata tag (source + engagement). Sections are capped at
+DigestConfig.section_item_cap items.
 """
 
 import html
 import os
-from collections import defaultdict
+import re
 from datetime import datetime
 from typing import List, Set
 
 from ..config import DigestConfig
 from ..models import ContentItem
-from ..utils import format_count, get_display_host, get_source_emoji
+from ..utils import format_count, get_display_host
 
 TELEGRAM_MAX_LENGTH = 4096
 
 SHOW_SCORES = os.getenv("SHOW_SCORES", "0").lower() in ("1", "true")
 
+# Strips "May 13, 2026 Announcements " and "May 13, 2026 " prefixes that
+# leak from Anthropic news-page aria-labels.
+_ANTHROPIC_DATE_PREFIX = re.compile(
+    r"^[A-Z][a-z]+ \d{1,2},?\s+\d{4}\s+(?:Announcements\s+)?"
+)
+
+
+# --- Helpers ---------------------------------------------------------------
 
 def _is_agent_item(item: ContentItem, agent_topics: Set[str]) -> bool:
     if not item.source_type.startswith("github"):
         return False
     topics = set(item.metadata.get("github_topics", []) or [])
     return bool(topics & agent_topics)
-
-
-def _group_by_source(items: List[ContentItem]):
-    groups: dict = defaultdict(list)
-    for it in items:
-        groups[it.source_name].append(it)
-    for name in groups:
-        groups[name].sort(key=lambda i: i.score, reverse=True)
-    return sorted(groups.items(), key=lambda kv: kv[1][0].score, reverse=True)
 
 
 def _score_suffix(item: ContentItem) -> str:
@@ -47,76 +46,125 @@ def _score_suffix(item: ContentItem) -> str:
     )
 
 
-def _render_hn_item(item: ContentItem) -> List[str]:
+def _clean_title(item: ContentItem) -> str:
+    """Strip source-name prefixes the scrapers prepend, plus Anthropic date leaks."""
+    t = item.title
+    prefix = f"{item.source_name}: "
+    if t.startswith(prefix):
+        t = t[len(prefix):]
+    # Hacker News scraper uses a hardcoded "Hacker News: " prefix.
+    if t.startswith("Hacker News: "):
+        t = t[len("Hacker News: "):]
+    if item.source_type == "official_anthropic":
+        t = _ANTHROPIC_DATE_PREFIX.sub("", t)
+    return t.strip()
+
+
+def _truncate(text: str, limit: int = 90) -> str:
+    if not text or len(text) <= limit:
+        return text
+    cut = text[:limit].rstrip()
+    space = cut.rfind(" ")
+    if space > 40:
+        cut = cut[:space]
+    return cut + "…"
+
+
+# --- Per-source-type line rendering ---------------------------------------
+
+def _line(url: str, title_html: str, tag: str, item: ContentItem) -> str:
+    body = f"• <a href='{url}'>{title_html}</a>"
+    if tag:
+        body += f" — {tag}"
+    return body + _score_suffix(item)
+
+
+def _render_anthropic(item: ContentItem) -> str:
+    title = html.escape(_clean_title(item))
+    return _line(item.url, title, "", item)
+
+
+def _render_hn(item: ContentItem) -> str:
+    title = html.escape(_clean_title(item))
     host = get_display_host(item.url)
     is_discussion = host == "news.ycombinator.com" or not host
-    label_emoji = "💬" if is_discussion else "📰"
-    label = "HN Discussion" if is_discussion else host
-
-    raw_title = item.title
-    if raw_title.startswith("Hacker News: "):
-        raw_title = raw_title[len("Hacker News: "):]
-    escaped_title = html.escape(raw_title)
-
+    src = "HN" if is_discussion else host
     descendants = item.metadata.get("hn_descendants") or 0
-    comments_str = f" 💬 {format_count(descendants)}" if descendants > 0 else ""
-
-    discussion_url = item.metadata.get("discussion_url")
-    line = f"{label_emoji} <b>{html.escape(label)}: {escaped_title}</b>{comments_str}{_score_suffix(item)}"
-
-    link_line = f"   🔗 <a href='{item.url}'>Read More</a>"
-    if not is_discussion and discussion_url:
-        link_line += f" · <a href='{discussion_url}'>HN</a>"
-
-    return [line, link_line]
+    tag = f"{src} 💬{format_count(descendants)}" if descendants else src
+    return _line(item.url, title, tag, item)
 
 
-def _render_github_item(item: ContentItem) -> List[str]:
-    emoji = get_source_emoji(item.source_name)
-    repo_display = item.title.split(": ", 1)[-1] if ": " in item.title else item.title
-    escaped_repo = html.escape(repo_display)
-    summary = item.summary if item.summary and item.summary != "No description available." else ""
-    escaped_summary = html.escape(summary)
+def _render_gh_release(item: ContentItem) -> str:
+    title = html.escape(_clean_title(item))
+    return _line(item.url, title, "release", item)
 
+
+def _render_gh_repo(item: ContentItem) -> str:
+    # github_search and github_event: title is repo path or an event sentence.
+    title = html.escape(_clean_title(item))
     stars = item.metadata.get("github_stars") or item.metadata.get("stars")
-    stars_str = f" ⭐{format_count(stars)}" if stars else ""
-
-    head = f"{emoji} <b>{escaped_repo}</b>{stars_str}"
-    if escaped_summary:
-        head += f" — {escaped_summary}"
-    head += _score_suffix(item)
-    return [head, f"   🔗 <a href='{item.url}'>Read More</a>"]
-
-
-def _render_generic_item(item: ContentItem, flash: bool = False) -> List[str]:
-    emoji = get_source_emoji(item.source_name)
-    escaped_title = html.escape(item.title)
-    if flash:
-        return [f"{emoji} <a href='{item.url}'>{escaped_title}</a>{_score_suffix(item)}"]
-    return [
-        f"{emoji} <b>{escaped_title}</b>{_score_suffix(item)}",
-        f"   🔗 <a href='{item.url}'>Read More</a>",
-    ]
+    star_str = f"⭐{format_count(stars)}" if stars else ""
+    desc = _truncate(item.summary or "", 90)
+    desc_html = html.escape(desc)
+    if star_str and desc_html:
+        tag = f"{star_str} — {desc_html}"
+    elif star_str:
+        tag = star_str
+    elif desc_html:
+        tag = desc_html
+    else:
+        tag = "GitHub"
+    return _line(item.url, title, tag, item)
 
 
-def _render_item(item: ContentItem, flash: bool = False) -> List[str]:
-    if item.source_type == "hackernews":
-        return _render_hn_item(item)
-    if item.source_type.startswith("github"):
-        return _render_github_item(item)
-    return _render_generic_item(item, flash=flash)
+def _render_reddit(item: ContentItem) -> str:
+    title = html.escape(_clean_title(item))
+    sub = item.metadata.get("subreddit", "")
+    score = item.metadata.get("reddit_score") or 0
+    tag = f"r/{sub} ⬆{format_count(score)}" if score else f"r/{sub}"
+    return _line(item.url, title, tag, item)
 
+
+def _render_telegram(item: ContentItem) -> str:
+    title = html.escape(_clean_title(item))
+    return _line(item.url, title, html.escape(item.source_name), item)
+
+
+def _render_rss(item: ContentItem) -> str:
+    title = html.escape(_clean_title(item))
+    return _line(item.url, title, html.escape(item.source_name), item)
+
+
+def _render_line(item: ContentItem) -> str:
+    st = item.source_type
+    if st == "official_anthropic":
+        return _render_anthropic(item)
+    if st == "hackernews":
+        return _render_hn(item)
+    if st == "github_release":
+        return _render_gh_release(item)
+    if st.startswith("github"):
+        return _render_gh_repo(item)
+    if st == "reddit":
+        return _render_reddit(item)
+    if st == "telegram":
+        return _render_telegram(item)
+    return _render_rss(item)
+
+
+# --- Main entry ------------------------------------------------------------
 
 def format_digest_message(scored_items: List[ContentItem], cfg: DigestConfig) -> List[str]:
-    """Format scored items into a digest, returned as one or more Telegram messages.
+    """Format scored items into one (rarely two) HTML messages.
 
-    Section headers and footer come from config. Long digests are split into
-    multiple messages respecting the 4096-character Telegram limit.
+    Compact layout: one line per item. Each section is capped at
+    cfg.section_item_cap items, sorted by score desc within section.
     """
-    now = datetime.now().strftime("%d/%m/%Y %H:%M")
+    now = datetime.now().strftime("%d/%m/%Y")
     labels = cfg.section_labels
     footer_lines = list(cfg.footer_lines)
     agent_topics = set(cfg.agent_topics)
+    cap = max(1, cfg.section_item_cap)
 
     official_items: List[ContentItem] = []
     agent_items: List[ContentItem] = []
@@ -136,51 +184,53 @@ def format_digest_message(scored_items: List[ContentItem], cfg: DigestConfig) ->
             continue
         kw = item.score_breakdown.get("keywords", 0)
         src = item.score_breakdown.get("source", 0)
-        is_big_release = item.score >= 5 and (kw >= 4 or src >= 4)
-        if is_big_release:
+        if item.score >= 5 and (kw >= 4 or src >= 4):
             big_releases.append(item)
         else:
             flash_news.append(item)
 
-    lines: List[str] = []
-    lines.append(f"📰 <b>{labels['title']}</b>")
-    lines.append(f"🗓 {now}")
-    lines.append("")
+    def _top(items: List[ContentItem]) -> List[ContentItem]:
+        return sorted(items, key=lambda i: i.score, reverse=True)[:cap]
 
-    def _render_section(header: str, items: List[ContentItem], flash: bool = False) -> None:
-        if not items:
-            return
-        lines.append(header)
-        lines.append("")
-        groups = _group_by_source(items)
-        for idx, (source_name, group_items) in enumerate(groups):
-            lines.append(f"<i>{html.escape(source_name)}</i>")
-            for item in group_items:
-                lines.extend(_render_item(item, flash=flash))
-            if idx < len(groups) - 1 or not flash:
-                lines.append("")
+    sections = [
+        ("🅰️", labels["official"],     _top(official_items)),
+        ("🚀", labels["big_releases"],  _top(big_releases)),
+        ("🤖", labels["agents"],        _top(agent_items)),
+        ("🔥", labels["github"],        _top(github_items)),
+        ("⚡", labels["flash"],         _top(flash_news)),
+    ]
 
-    _render_section(f"🅰️ <b>{labels['official']}</b>",     official_items)
-    _render_section(f"🚀 <b>{labels['big_releases']}</b>",  big_releases)
-    _render_section(f"🤖 <b>{labels['agents']}</b>",        agent_items)
-    _render_section(f"🔥 <b>{labels['github']}</b>",        github_items)
-    _render_section(f"⚡ <b>{labels['flash']}</b>",         flash_news, flash=True)
-
-    if not (official_items or agent_items or big_releases or github_items or flash_news):
+    if not any(items for _, _, items in sections):
         empty = (
-            f"📰 <b>{labels['title']}</b>\n🗓 {now}\n\n"
+            f"📰 <b>{labels['title']}</b> — {now}\n\n"
             f"{labels['empty']} 🤷\n\n"
             + "\n".join(footer_lines)
         )
         return [empty]
 
+    lines: List[str] = []
+    lines.append(f"📰 <b>{labels['title']}</b> — {now}")
+    lines.append("")
+
+    for emoji, header, items in sections:
+        if not items:
+            continue
+        lines.append(f"{emoji} <b>{header}</b>")
+        for item in items:
+            lines.append(_render_line(item))
+        lines.append("")
+
+    # Trim trailing blank, then append footer.
+    while lines and lines[-1] == "":
+        lines.pop()
+    lines.append("")
     lines.extend(footer_lines)
 
     full_message = "\n".join(lines)
     if len(full_message) <= TELEGRAM_MAX_LENGTH:
         return [full_message]
 
-    # Split into multiple parts, preserving line boundaries.
+    # Split (rare with capped sections, but defensive).
     messages: List[str] = []
     current_msg = ""
     part_num = 1

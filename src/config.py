@@ -130,6 +130,7 @@ class DigestConfig:
     section_labels: Dict[str, str] = field(default_factory=dict)
     footer_lines: List[str] = field(default_factory=list)
     agent_topics: List[str] = field(default_factory=list)
+    section_item_cap: int = 5
 
 
 @dataclass
