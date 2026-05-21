@@ -9,13 +9,6 @@ filters, and groups items into a single message.
 Adding a feed, removing a subreddit, tweaking a keyword weight — all YAML edits,
 no Python changes required.
 
-## Credits
-
-Based on [liadb33/AI-news-aggregator-he](https://github.com/liadb33/AI-news-aggregator-he),
-itself a fork of [hrnrxb/AI-News-Aggregator-Bot](https://github.com/hrnrxb/AI-News-Aggregator-Bot).
-Both MIT-licensed. This repo adds YAML-driven configuration, an English digest,
-and a module reorganization.
-
 ## What it does
 
 1. **Fetch** from every enabled source concurrently (RSS, HN, GitHub, Reddit, Telegram, Anthropic news).
