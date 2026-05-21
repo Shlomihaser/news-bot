@@ -33,22 +33,22 @@ except ImportError:
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from src.config import load_config
-    from src.db import initialize_db, load_sent_links
-    from src.dedup import merge_cross_source_duplicates
-    from src.digest import format_digest_message
     from src.models import ContentItem
-    from src.notifier import send_digest
-    from src.orchestrator import fetch_all_sources
-    from src.scoring import filter_and_rank
+    from src.pipeline.dedup import merge_cross_source_duplicates
+    from src.pipeline.digest import format_digest_message
+    from src.pipeline.notifier import send_digest
+    from src.pipeline.orchestrator import fetch_all_sources
+    from src.pipeline.scoring import filter_and_rank
+    from src.storage.db import initialize_db, load_sent_links
 else:
     from .config import load_config
-    from .db import initialize_db, load_sent_links
-    from .dedup import merge_cross_source_duplicates
-    from .digest import format_digest_message
     from .models import ContentItem
-    from .notifier import send_digest
-    from .orchestrator import fetch_all_sources
-    from .scoring import filter_and_rank
+    from .pipeline.dedup import merge_cross_source_duplicates
+    from .pipeline.digest import format_digest_message
+    from .pipeline.notifier import send_digest
+    from .pipeline.orchestrator import fetch_all_sources
+    from .pipeline.scoring import filter_and_rank
+    from .storage.db import initialize_db, load_sent_links
 
 
 logging.basicConfig(

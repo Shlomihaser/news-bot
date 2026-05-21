@@ -16,8 +16,8 @@ import re
 from datetime import datetime, timezone
 from typing import Dict, List, Pattern, Tuple
 
-from .config import ScoringConfig
-from .models import ContentItem
+from ..config import ScoringConfig
+from ..models import ContentItem
 
 
 def _compile_patterns(weights: Dict[str, int]) -> List[Tuple[Pattern, int]]:

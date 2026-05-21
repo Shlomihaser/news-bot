@@ -11,15 +11,15 @@ from typing import List
 
 import httpx
 
-from .config import Config
-from .models import ContentItem
-from .scrapers.anthropic_official import AnthropicOfficialScraper
-from .scrapers.base import BaseScraper
-from .scrapers.github import GitHubScraper
-from .scrapers.hackernews import HackerNewsScraper
-from .scrapers.reddit import RedditScraper
-from .scrapers.rss import RSSScraper
-from .scrapers.telegram import TelegramScraper
+from ..config import Config
+from ..models import ContentItem
+from ..scrapers.anthropic_official import AnthropicOfficialScraper
+from ..scrapers.base import BaseScraper
+from ..scrapers.github import GitHubScraper
+from ..scrapers.hackernews import HackerNewsScraper
+from ..scrapers.reddit import RedditScraper
+from ..scrapers.rss import RSSScraper
+from ..scrapers.telegram import TelegramScraper
 
 logger = logging.getLogger(__name__)
 

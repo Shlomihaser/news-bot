@@ -34,17 +34,19 @@ news-bot/
 ├── config/
 │   └── aggregator.yaml     # the only file you edit to tune the bot
 ├── src/
+│   ├── main.py             # entry point: wires everything together
 │   ├── config.py           # YAML loader + typed dataclasses
 │   ├── models.py           # ContentItem (uniform shape across sources)
-│   ├── db.py               # sent_links SQLite
-│   ├── dedup.py            # cross-source URL-normalization dedup
-│   ├── scoring.py          # keyword/engagement/recency scoring
-│   ├── orchestrator.py     # runs enabled scrapers concurrently
-│   ├── digest.py           # formats scored items into HTML messages
-│   ├── notifier.py         # ships the digest to Telegram
-│   ├── main.py             # entry point: wires everything together
 │   ├── utils.py            # display helpers
-│   └── scrapers/
+│   ├── pipeline/           # the data flow: fetch → dedup → score → format → deliver
+│   │   ├── orchestrator.py # runs enabled scrapers concurrently
+│   │   ├── dedup.py        # cross-source URL-normalization dedup
+│   │   ├── scoring.py      # keyword/engagement/recency scoring
+│   │   ├── digest.py       # formats scored items into HTML messages
+│   │   └── notifier.py     # ships the digest to Telegram
+│   ├── storage/            # persistence
+│   │   └── db.py           # sent_links SQLite
+│   └── scrapers/           # source-specific fetchers
 │       ├── base.py
 │       ├── rss.py
 │       ├── hackernews.py

@@ -13,8 +13,8 @@ from telegram import Bot
 from telegram.constants import ParseMode
 from telegram.error import RetryAfter, TimedOut
 
-from .db import save_sent_link
-from .models import ContentItem
+from ..models import ContentItem
+from ..storage.db import save_sent_link
 
 
 def _bot_from_env() -> Optional[Bot]:

@@ -9,7 +9,7 @@ populated for the cross-source scoring bonus.
 from typing import List
 from urllib.parse import urlparse
 
-from .models import ContentItem
+from ..models import ContentItem
 
 
 def normalize_url(url: str) -> str:

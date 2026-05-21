@@ -3,10 +3,10 @@ import sqlite3
 
 # DB lives in <repo>/data/sent_links.db. On GitHub Actions GITHUB_WORKSPACE
 # points to the repo root; locally we fall back to the project root computed
-# from this file's location.
+# from this file's location (src/storage/db.py → up three dirs).
 _PROJECT_ROOT = os.getenv(
     "GITHUB_WORKSPACE",
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
 )
 DB_FILE = os.path.join(_PROJECT_ROOT, "data", "sent_links.db")
 

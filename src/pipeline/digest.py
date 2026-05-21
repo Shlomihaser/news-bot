@@ -11,9 +11,9 @@ from collections import defaultdict
 from datetime import datetime
 from typing import List, Set
 
-from .config import DigestConfig
-from .models import ContentItem
-from .utils import format_count, get_display_host, get_source_emoji
+from ..config import DigestConfig
+from ..models import ContentItem
+from ..utils import format_count, get_display_host, get_source_emoji
 
 TELEGRAM_MAX_LENGTH = 4096
 
