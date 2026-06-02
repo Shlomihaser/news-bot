@@ -134,11 +134,20 @@ class DigestConfig:
 
 
 @dataclass
+class LLMScoringConfig:
+    enabled: bool = True
+    model: str = "gemini-2.0-flash"
+    min_score: int = 6
+    batch_size: int = 40
+
+
+@dataclass
 class Config:
     time_window_hours: int = 24
     sources: SourcesConfig = field(default_factory=SourcesConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     digest: DigestConfig = field(default_factory=DigestConfig)
+    llm_scoring: LLMScoringConfig = field(default_factory=LLMScoringConfig)
 
 
 # --- Generic dict → dataclass coercion -------------------------------------

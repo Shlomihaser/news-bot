@@ -36,6 +36,7 @@ if __package__ in (None, ""):
     from src.models import ContentItem
     from src.pipeline.dedup import merge_cross_source_duplicates
     from src.pipeline.digest import format_digest_message
+    from src.pipeline.llm_scorer import llm_filter
     from src.pipeline.notifier import send_digest
     from src.pipeline.orchestrator import fetch_all_sources
     from src.pipeline.scoring import filter_and_rank
@@ -45,6 +46,7 @@ else:
     from .models import ContentItem
     from .pipeline.dedup import merge_cross_source_duplicates
     from .pipeline.digest import format_digest_message
+    from .pipeline.llm_scorer import llm_filter
     from .pipeline.notifier import send_digest
     from .pipeline.orchestrator import fetch_all_sources
     from .pipeline.scoring import filter_and_rank
@@ -96,6 +98,11 @@ async def main_bot_run() -> None:
 
     print("\n--- Scoring and Filtering ---")
     scored = filter_and_rank(fresh, cfg.scoring)
+    _log_per_source_counts("after keyword scoring", scored)
+
+    print("\n--- LLM Relevance Filter ---")
+    scored = await llm_filter(scored, cfg.llm_scoring)
+    scored.sort(key=lambda i: i.score, reverse=True)
     _log_per_source_counts("in digest", scored)
 
     digest_messages = format_digest_message(scored, cfg.digest)

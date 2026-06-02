@@ -1,21 +1,32 @@
 # news-bot
 
-A personal AI-news aggregator that posts a daily English digest to a Telegram
-channel. Fetches from RSS feeds, Hacker News, GitHub releases/trending,
-Reddit, Telegram channels, and Anthropic's official news pages — then scores,
-filters, and groups items into a single message.
+A personal AI-news aggregator that posts a daily digest to a Telegram channel.
+Pulls from 26 RSS feeds, Hacker News, 30 GitHub repos, 9 subreddits, and
+Anthropic's official news page — then scores, LLM-filters, and groups everything
+into a single focused message.
 
 **Everything is configured from one file: [`config/aggregator.yaml`](config/aggregator.yaml).**
-Adding a feed, removing a subreddit, tweaking a keyword weight — all YAML edits,
-no Python changes required.
+Adding a feed, removing a subreddit, tweaking a keyword weight — all YAML edits, no code changes needed.
 
 ## What it does
 
-1. **Fetch** from every enabled source concurrently (RSS, HN, GitHub, Reddit, Telegram, Anthropic news).
-2. **Dedup** against a persistent SQLite DB of previously-sent URLs, and again across sources by URL normalization.
-3. **Score** by keyword matches, source weight, engagement (HN/Reddit/Telegram), and recency.
-4. **Group** into sections: Official from Anthropic / Big Releases / AI Agents & New Tools / Hot on GitHub / Flash News.
-5. **Send** one HTML-formatted digest message (auto-split if it exceeds Telegram's 4096-char limit).
+1. **Fetch** from every enabled source concurrently (RSS, HN, GitHub, Reddit, Anthropic news).
+2. **Dedup** against a persistent SQLite DB of previously-sent URLs, and across sources by URL normalization.
+3. **Keyword-score** by keyword matches, source trust, engagement (HN/Reddit), cross-source mentions, and recency.
+4. **LLM-filter** using Gemini Flash (free tier) — each item is scored 1–10 for relevance and low-signal items are dropped.
+5. **Group** into sections: Anthropic / Big Releases & Announcements / AI Agents, Tools & MCP / Hot on GitHub / Industry Updates.
+6. **Send** one HTML-formatted Telegram message (auto-split if needed).
+
+## Sources covered
+
+| Category | Sources |
+|---|---|
+| AI labs | Anthropic, OpenAI, Google DeepMind, Meta AI, Mistral AI, Google AI, Microsoft AI, Nvidia |
+| Research | Hugging Face Blog & Papers, Lilian Weng, Sebastian Raschka (Ahead of AI), Interconnects, The Batch, The Gradient, Jay Alammar, Latent Space, Import AI, Papers with Code, MIT AI News |
+| Industry news | VentureBeat AI, TechCrunch AI, Ars Technica AI, The Verge AI, TLDR AI |
+| Hacker News | Top stories (min 100pts) + Algolia keyword search (14 keywords) |
+| Reddit | r/LocalLLaMA, r/MachineLearning, r/ClaudeAI, r/OpenAI, r/singularity, r/LocalLLM, r/artificial, r/ChatGPT, r/Anthropic |
+| GitHub | 30 watched repos (releases) + topic search + events from 6 developers |
 
 ## Layout
 
@@ -31,15 +42,16 @@ news-bot/
 │   ├── config.py           # YAML loader + typed dataclasses
 │   ├── models.py           # ContentItem (uniform shape across sources)
 │   ├── utils.py            # display helpers
-│   ├── pipeline/           # the data flow: fetch → dedup → score → format → deliver
+│   ├── pipeline/
 │   │   ├── orchestrator.py # runs enabled scrapers concurrently
 │   │   ├── dedup.py        # cross-source URL-normalization dedup
 │   │   ├── scoring.py      # keyword/engagement/recency scoring
+│   │   ├── llm_scorer.py   # Gemini-based relevance filter (free tier)
 │   │   ├── digest.py       # formats scored items into HTML messages
 │   │   └── notifier.py     # ships the digest to Telegram
-│   ├── storage/            # persistence
+│   ├── storage/
 │   │   └── db.py           # sent_links SQLite
-│   └── scrapers/           # source-specific fetchers
+│   └── scrapers/
 │       ├── base.py
 │       ├── rss.py
 │       ├── hackernews.py
@@ -48,7 +60,7 @@ news-bot/
 │       ├── telegram.py
 │       └── anthropic_official.py
 ├── data/                   # sent_links.db lives here (gitignored)
-├── tests/                  # reserved
+├── tests/
 ├── .env.example
 ├── requirements.txt
 └── LICENSE
@@ -75,34 +87,33 @@ news-bot/
    ```powershell
    python -m src.main --dry-run
    ```
-6. Live run:
-   ```powershell
-   python -m src.main
-   ```
 
 ## Deploy to GitHub Actions
 
 1. Push the repo to GitHub.
 2. In repo settings → **Secrets and variables → Actions**, add:
-   - `TELEGRAM_BOT_TOKEN`
-   - `TELEGRAM_CHANNEL_ID`
-3. In the **Actions** tab, enable workflows and click **Run workflow** on
-   *AI News Aggregator Bot* to test.
-4. Adjust the cron in `.github/workflows/digest.yml` to your preferred time.
+   | Secret | Where to get it |
+   |---|---|
+   | `TELEGRAM_BOT_TOKEN` | [@BotFather](https://t.me/BotFather) on Telegram |
+   | `TELEGRAM_CHANNEL_ID` | your channel's `@handle` or numeric ID |
+   | `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com) → Get API key (free) |
+3. In the **Actions** tab, enable workflows and click **Run workflow** on *AI News Aggregator Bot* to test.
+4. Adjust the cron in `.github/workflows/digest.yml` if needed (default: 03:00 UTC daily).
 
-## Editing the config
+> **LLM filtering is optional.** If `GEMINI_API_KEY` is not set the bot skips the Gemini step and falls back to keyword scoring only. Gemini Flash free tier allows 1,500 requests/day — the bot uses 1–2 per run.
 
-Open [`config/aggregator.yaml`](config/aggregator.yaml). Every section is
-commented. Common edits:
+## Tuning the config
 
-- **Add an RSS feed**: append a line under `sources.rss.feeds`.
-- **Disable Reddit for a week**: set `sources.reddit.enabled: false`.
-- **Follow another subreddit**: add an entry under `sources.reddit.subreddits`.
-- **Bump a keyword weight**: change its number under `scoring.keywords`.
-- **Change a section label**: edit `digest.section_labels.<key>`.
+Open [`config/aggregator.yaml`](config/aggregator.yaml). Common edits:
 
-After any edit, run `python -m src.main --dry-run` to verify it looks right
-before deploying.
+- **Add an RSS feed** — append a line under `sources.rss.feeds`
+- **Follow a subreddit** — add an entry under `sources.reddit.subreddits`
+- **Watch a GitHub repo** — add an entry under `sources.github.releases`
+- **Boost a keyword** — raise its number under `scoring.keywords`
+- **Tighten LLM filtering** — raise `llm_scoring.min_score` (default: 6, max: 10)
+- **Disable LLM filtering** — set `llm_scoring.enabled: false`
+
+After any edit, run `python -m src.main --dry-run` to preview the digest locally.
 
 ## License
 
